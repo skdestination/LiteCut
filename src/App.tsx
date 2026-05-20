@@ -49,7 +49,6 @@ import {
   Music,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { get, set } from "idb-keyval";
 import { SpeedCurveEditor } from "./SpeedCurveEditor";
 
 type Screen = "home" | "editor" | "settings";
@@ -80,7 +79,6 @@ type Clip = {
   layerId: string;
   type: "video" | "image" | "audio" | "text";
   src: string;
-  fileId?: string;
   text?: string;
   color?: string;
   fontFamily?: string;
@@ -215,45 +213,35 @@ export default function App() {
   );
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 
-  const [flowBarOrder, setFlowBarOrder] = useState<string[]>(DEFAULT_FLOW_BAR_ORDER);
+  const [flowBarOrder, setFlowBarOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("ai_studio_video_flowbar_order");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return DEFAULT_FLOW_BAR_ORDER;
+  });
 
-  const [isProjectsLoaded, setIsProjectsLoaded] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
-
-  useEffect(() => {
-    const loadState = async () => {
-      try {
-        const savedOrder = await get("ai_studio_video_flowbar_order");
-        if (savedOrder) setFlowBarOrder(savedOrder);
-      } catch (e) {}
-
-      try {
-        const saved = await get("ai_studio_video_projects");
-        if (saved) {
-          setProjects(saved);
-        } else {
-          setProjects([
-            {
-              id: "1",
-              name: "Summer Vacation",
-              ratio: "9:16",
-              updatedAt: "2 hours ago",
-              duration: "00:15",
-              size: "124 MB",
-              thumbnail:
-                "https://images.unsplash.com/photo-1542204165-65bf26472b9b?auto=format&fit=crop&q=80&w=300",
-              layers: [],
-              clips: [],
-            },
-          ]);
-        }
-      } catch (e) {
-        console.error("Failed to load projects from IDB", e);
-      }
-      setIsProjectsLoaded(true);
-    };
-    loadState();
-  }, []);
+  // Home Screen State
+  const [projects, setProjects] = useState<Project[]>(() => {
+    try {
+      const saved = localStorage.getItem("ai_studio_video_projects");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [
+      {
+        id: "1",
+        name: "Summer Vacation",
+        ratio: "9:16",
+        updatedAt: "2 hours ago",
+        duration: "00:15",
+        size: "124 MB",
+        thumbnail:
+          "https://images.unsplash.com/photo-1542204165-65bf26472b9b?auto=format&fit=crop&q=80&w=300",
+        layers: [],
+        clips: [],
+      },
+    ];
+  });
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [selectedRatioTransition, setSelectedRatioTransition] = useState<
@@ -610,7 +598,7 @@ export default function App() {
 
     setProjects((prev) => {
       const updated = [newProject, ...prev];
-      set("ai_studio_video_projects", updated).catch(console.error);
+      localStorage.setItem("ai_studio_video_projects", JSON.stringify(updated));
       return updated;
     });
 
@@ -632,7 +620,7 @@ export default function App() {
     };
     setProjects((prev) => {
       const updated = [newProject, ...prev];
-      set("ai_studio_video_projects", updated).catch(console.error);
+      localStorage.setItem("ai_studio_video_projects", JSON.stringify(updated));
       return updated;
     });
     setProjectMenuOpenId(null);
@@ -643,41 +631,18 @@ export default function App() {
     if (!projectToDelete) return;
     setProjects((prev) => {
       const updated = prev.filter((p) => p.id !== projectToDelete);
-      set("ai_studio_video_projects", updated).catch(console.error);
+      localStorage.setItem("ai_studio_video_projects", JSON.stringify(updated));
       return updated;
     });
     setProjectToDelete(null);
     showToast("Project deleted");
   };
 
-  const openProject = async (project: Project) => {
+  const openProject = (project: Project) => {
     setActiveProjectId(project.id);
     setCurrentProjectRatio(project.ratio);
     setLayers(project.layers || []);
-
-    const updatedClips = await Promise.all((project.clips || []).map(async (clip) => {
-      if (clip.fileId) {
-        if (clip.src.startsWith('blob:')) {
-          try {
-            const res = await fetch(clip.src);
-            if (res.ok) return clip;
-          } catch (e) {}
-        }
-        
-        // Load from IDB
-        try {
-          const file = await get(clip.fileId);
-          if (file) {
-            return { ...clip, src: URL.createObjectURL(file) };
-          }
-        } catch (e) {
-          console.error("Failed to restore file from IDB", e);
-        }
-      }
-      return clip;
-    }));
-
-    setClips(updatedClips);
+    setClips(project.clips || []);
     setCurrentTime(0);
     setZoomLevel(1);
     setCurrentScreen("editor");
@@ -708,8 +673,11 @@ export default function App() {
           }
           return p;
         });
-        // We debounce IDB save slightly or just write it
-        set("ai_studio_video_projects", updated).catch(console.error);
+        // We debounce local storage save slightly or just write it
+        localStorage.setItem(
+          "ai_studio_video_projects",
+          JSON.stringify(updated),
+        );
         return updated;
       });
     }
@@ -721,11 +689,9 @@ export default function App() {
     src: string,
     duration: number,
     startAtTime: number,
-    fileId?: string,
   ) => {
     const newLayerId = "L_" + id;
     setLayers((prev) => {
-      if (prev.some(l => l.id === newLayerId)) return prev;
       const maxOrder = prev.reduce((max, l) => Math.max(max, l.order), -1);
       return [
         ...prev,
@@ -738,31 +704,26 @@ export default function App() {
       ];
     });
 
-    setClips((prev) => {
-      if (prev.some(c => c.id === id)) return prev;
-      return [
-        ...prev,
-        {
-          id,
-          layerId: newLayerId,
-          type,
-          src,
-          fileId,
-          leftSeconds: startAtTime,
-          durationSeconds: duration,
-          trimStartSeconds: 0,
-        },
-      ];
-    });
+    setClips((prev) => [
+      ...prev,
+      {
+        id,
+        layerId: newLayerId,
+        type,
+        src,
+        leftSeconds: startAtTime,
+        durationSeconds: duration,
+        trimStartSeconds: 0,
+      },
+    ]);
   };
 
   const handleAddText = () => {
     const startAtTime = currentTime;
     const duration = 5;
-    const newLayerId = "L_" + Math.random().toString(36).substring(2, 9);
+    const newLayerId = Math.random().toString(36).substring(2, 9);
 
     setLayers((prev) => {
-      if (prev.some(l => l.id === newLayerId)) return prev;
       const minOrder =
         prev.length > 0 ? Math.min(...prev.map((l) => l.order)) : 0;
       return [
@@ -776,43 +737,33 @@ export default function App() {
       ];
     });
 
-    const newTextId = "T_" + Math.random().toString(36).substring(2, 9);
-    setClips((prev) => {
-      if (prev.some(c => c.id === newTextId)) return prev;
-      return [
-        ...prev,
-        {
-          id: newTextId,
-          layerId: newLayerId,
-          type: "text",
-          src: "",
-          text: "New Text",
-          color: "#ffffff",
-          fontSize: 48,
-          leftSeconds: startAtTime,
-          durationSeconds: duration,
-          trimStartSeconds: 0,
-        },
-      ];
-    });
+    const newTextId = Math.random().toString(36).substring(2, 9);
+    setClips((prev) => [
+      ...prev,
+      {
+        id: newTextId,
+        layerId: newLayerId,
+        type: "text",
+        src: "",
+        text: "New Text",
+        color: "#ffffff",
+        fontSize: 48,
+        leftSeconds: startAtTime,
+        durationSeconds: duration,
+        trimStartSeconds: 0,
+      },
+    ]);
     setSelectedClipId(newTextId);
     setActiveExpandedMenu("text");
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     let type: "video" | "image" | "audio" = "video";
     if (file.type.startsWith("image/")) type = "image";
     if (file.type.startsWith("audio/")) type = "audio";
-
-    const fileId = Math.random().toString(36).substring(2, 15);
-    try {
-      await set(fileId, file);
-    } catch (err) {
-      console.error("Failed to save file to IndexedDB", err);
-    }
 
     const src = URL.createObjectURL(file);
     const id = Math.random().toString(36).substring(2, 9);
@@ -825,11 +776,11 @@ export default function App() {
           : document.createElement("audio");
       media.preload = "metadata";
       media.onloadedmetadata = () => {
-        addMediaClip(id, type, src, media.duration || 10, startAtTime, fileId);
+        addMediaClip(id, type, src, media.duration || 10, startAtTime);
       };
       media.src = src;
     } else {
-      addMediaClip(id, type, src, 5, startAtTime, fileId);
+      addMediaClip(id, type, src, 5, startAtTime);
     }
   };
 
@@ -879,20 +830,18 @@ export default function App() {
 
   const splitSelectedClip = () => {
     if (!selectedClipId) return;
+    const clip = clips.find((c) => c.id === selectedClipId);
+    if (!clip) return;
 
+    const isWithin =
+      currentTime > clip.leftSeconds &&
+      currentTime < clip.leftSeconds + clip.durationSeconds;
+    if (!isWithin) return;
+
+    const firstDuration = currentTime - clip.leftSeconds;
     const newClipId = "C_" + Math.random().toString(36).substring(2, 9);
 
     setClips((prev) => {
-      const clip = prev.find((c) => c.id === selectedClipId);
-      if (!clip) return prev;
-
-      const isWithin =
-        currentTime > clip.leftSeconds &&
-        currentTime < clip.leftSeconds + clip.durationSeconds;
-      if (!isWithin) return prev; // Avoid second trigger in Strict Mode
-
-      const firstDuration = currentTime - clip.leftSeconds;
-      
       const rest = prev.filter((c) => c.id !== selectedClipId);
       const newClip1 = {
         ...clip,
@@ -930,34 +879,35 @@ export default function App() {
     if (!videoClip) return;
 
     const newClipId = "C_" + Math.random().toString(36).substring(2, 9);
-    const newLayerId = "L_AUDIO_" + Math.random().toString(36).substring(2, 9);
     
     setLayers(prevLayers => {
       // Find the minimum layer order to place the new audio layer below it
       const minOrder = prevLayers.length > 0 ? Math.min(...prevLayers.map(l => l.order)) : 0;
+      const newLayerId = "L_AUDIO_" + Math.random().toString(36).substring(2, 9);
       
       const newLayer: Layer = {
         id: newLayerId,
         order: minOrder - 1,
         isHidden: false,
         isMuted: false,
+        name: "Extracted Audio",
       };
       
-      return [...prevLayers, newLayer];
-    });
-
-    setClips(prevClips => {
-      if (prevClips.some(c => c.id === newClipId)) return prevClips;
-
-      const audioClip: Clip = {
-         ...videoClip,
-         id: newClipId,
-         layerId: newLayerId,
-         type: "audio"
-      };
-      // Also mute the original video clip
-      const modifiedVideos = prevClips.map(c => c.id === videoClip.id ? { ...c, volume: 0 } : c);
-      return [...modifiedVideos, audioClip];
+      const newClipsLayers = [...prevLayers, newLayer];
+      
+      setClips(prevClips => {
+        const audioClip: Clip = {
+           ...videoClip,
+           id: newClipId,
+           layerId: newLayerId,
+           type: "audio"
+        };
+        // Also mute the original video clip? It defaults to replacing audio. Let's set its volume to 0.
+        const modifiedVideos = prevClips.map(c => c.id === videoClip.id ? { ...c, volume: 0 } : c);
+        return [...modifiedVideos, audioClip];
+      });
+      
+      return newClipsLayers;
     });
     
     setToastMessage("Audio extracted to new layer");
@@ -967,67 +917,53 @@ export default function App() {
   const handlePaste = () => {
     if (!copiedClip || !pastePopup) return;
 
-    // Assign unique IDs per function call
-    const currentMsId = Date.now().toString();
-    const newTargetLayerId = currentMsId + "_L";
-
     let targetLayerId = pastePopup.layerId;
+    let newLayers = [...layers];
 
     if (!targetLayerId) {
-      setLayers((prevLayers) => {
-        const maxOrder = prevLayers.reduce((max, l) => Math.max(max, l.order), 0);
-        return [
-          ...prevLayers,
-          {
-            id: newTargetLayerId,
-            order: maxOrder + 1,
-            isMuted: false,
-            isHidden: false,
-            name: "Layer " + (prevLayers.length + 1)
-          },
-        ];
-      });
-      targetLayerId = newTargetLayerId;
+      targetLayerId = Date.now().toString();
+      const maxOrder = layers.reduce((max, l) => Math.max(max, l.order), 0);
+      newLayers = [
+        ...layers,
+        {
+          id: targetLayerId,
+          order: maxOrder + 1,
+          isMuted: false,
+          isHidden: false,
+        },
+      ];
+      setLayers(newLayers);
     }
 
     let targetTime = pastePopup.time;
+    const layerClips = clips.filter((c) => c.layerId === targetLayerId);
 
-    setClips((prevClips) => {
-      // Prevent Strict Mode duplicate pastes for the same unique ID
-      if (prevClips.some(c => c.id === currentMsId)) return prevClips;
-
-      const layerClips = prevClips.filter((c) => c.layerId === targetLayerId);
-
-      // Check if targetTime overlaps any existing clip on this layer
-      const overlappingClip = layerClips.find(
-        (c) =>
-          targetTime >= c.leftSeconds &&
-          targetTime < c.leftSeconds + c.durationSeconds,
-      );
-
-      let adjustedTime = targetTime;
-      if (overlappingClip) {
-        const midPoint =
-          overlappingClip.leftSeconds + overlappingClip.durationSeconds / 2;
-        if (targetTime < midPoint) {
-          adjustedTime = overlappingClip.leftSeconds - copiedClip.durationSeconds;
-          if (adjustedTime < 0) adjustedTime = 0;
-        } else {
-          adjustedTime =
-            overlappingClip.leftSeconds + overlappingClip.durationSeconds;
-        }
+    // Check if targetTime overlaps any existing clip on this layer
+    const overlappingClip = layerClips.find(
+      (c) =>
+        targetTime >= c.leftSeconds &&
+        targetTime < c.leftSeconds + c.durationSeconds,
+    );
+    if (overlappingClip) {
+      const midPoint =
+        overlappingClip.leftSeconds + overlappingClip.durationSeconds / 2;
+      if (targetTime < midPoint) {
+        targetTime = overlappingClip.leftSeconds - copiedClip.durationSeconds;
+        if (targetTime < 0) targetTime = 0;
+      } else {
+        targetTime =
+          overlappingClip.leftSeconds + overlappingClip.durationSeconds;
       }
+    }
 
-      const newClip: Clip = {
-        ...copiedClip,
-        id: currentMsId, // use generated ID
-        layerId: targetLayerId as string,
-        leftSeconds: Math.max(0, adjustedTime),
-      };
+    const newClip: Clip = {
+      ...copiedClip,
+      id: Date.now().toString(),
+      layerId: targetLayerId,
+      leftSeconds: targetTime,
+    };
 
-      return [...prevClips, newClip];
-    });
-
+    setClips([...clips, newClip]);
     setPastePopup(null);
     setToastMessage("Clip pasted");
     setTimeout(() => setToastMessage(null), 2000);
@@ -1525,7 +1461,7 @@ export default function App() {
       const temp = newOrder[index];
       newOrder[index] = newOrder[targetIndex];
       newOrder[targetIndex] = temp;
-      set("ai_studio_video_flowbar_order", newOrder).catch(console.error);
+      localStorage.setItem("ai_studio_video_flowbar_order", JSON.stringify(newOrder));
       return newOrder;
     });
   };
