@@ -1,0 +1,17 @@
+248:  const [isCreatingProject, setIsCreatingProject] = useState(false);
+259:  const [currentTime, setCurrentTime] = useState(0);
+260:  const [isPlaying, setIsPlaying] = useState(false);
+261:  const [zoomLevel, setZoomLevel] = useState(1); // 1 = normal, 2 = zoomed in
+262:  const [playheadX, setPlayheadX] = useState(150);
+270:  const [applyVolumeToAll, setApplyVolumeToAll] = useState(false);
+271:  const [clipVolume, setClipVolume] = useState(100);
+272:  const [clipSpeed, setClipSpeed] = useState(1);
+280:  const [showKeyframeGraph, setShowKeyframeGraph] = useState(false);
+286:  const [isExportExpanded, setIsExportExpanded] = useState(false);
+287:  const [exportResolution, setExportResolution] = useState("4K");
+288:  const [exportFps, setExportFps] = useState("30");
+289:  const [exportBitrate, setExportBitrate] = useState("High");
+290:  const [exportOpticalFlow, setExportOpticalFlow] = useState(true);
+315:  const [historyIndex, setHistoryIndex] = useState(0);
+420:  const [isExporting, setIsExporting] = useState(false);
+421:  const [exportProgress, setExportProgress] = useState(0);

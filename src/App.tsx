@@ -49,6 +49,7 @@ import {
   Music,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { processSmoothSlowMoBrowser } from "./lib/opticalFlow";
 import { SpeedCurveEditor } from "./SpeedCurveEditor";
 
 type Screen = "home" | "editor" | "settings";
@@ -79,6 +80,7 @@ type Clip = {
   layerId: string;
   type: "video" | "image" | "audio" | "text";
   src: string;
+  originalSrc?: string;
   text?: string;
   color?: string;
   fontFamily?: string;
@@ -242,6 +244,22 @@ export default function App() {
       },
     ];
   });
+  
+  const [appScale, setAppScale] = useState(1);
+  useEffect(() => {
+    try {
+      const savedScale = localStorage.getItem("ai_studio_app_scale");
+      if (savedScale && !isNaN(parseFloat(savedScale))) {
+        setAppScale(parseFloat(savedScale));
+      }
+    } catch(e){}
+  }, []);
+
+  const handleAppScaleChange = (scale: number) => {
+    setAppScale(scale);
+    localStorage.setItem("ai_studio_app_scale", scale.toString());
+  };
+
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [selectedRatioTransition, setSelectedRatioTransition] = useState<
@@ -1533,6 +1551,41 @@ export default function App() {
 
             <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6">
               <h3 className="text-white font-bold mb-4 text-xl">
+                App Layout Scale
+              </h3>
+              <p className="text-sm text-zinc-400 mb-6 font-medium">
+                Adjust the overall size of the app interface independently from your device display.
+              </p>
+              <div className="flex flex-col gap-4">
+                <div className="flex justify-between items-center px-1">
+                  <span className="text-zinc-300 font-medium text-sm">Scale</span>
+                  <span className="text-white font-mono font-bold">{Math.round(appScale * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2"
+                  step="0.05"
+                  value={appScale}
+                  onChange={(e) => handleAppScaleChange(parseFloat(e.target.value))}
+                  className="w-full accent-white h-2 rounded-lg appearance-none bg-zinc-800"
+                />
+                <div className="flex justify-between w-full px-1 mt-1">
+                  <span className="text-[10px] text-zinc-500 font-bold">50%</span>
+                  <span className="text-[10px] text-zinc-500 font-bold">100%</span>
+                  <span className="text-[10px] text-zinc-500 font-bold">200%</span>
+                </div>
+                <button
+                  onClick={() => handleAppScaleChange(1)}
+                  className="mt-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors bg-zinc-800/50 hover:bg-zinc-800 py-2 rounded-xl border border-white/5"
+                >
+                  Reset Default
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6">
+              <h3 className="text-white font-bold mb-4 text-xl">
                 Export Preferences
               </h3>
               <div className="flex flex-col gap-5">
@@ -1603,7 +1656,7 @@ export default function App() {
             {projects.map((p) => (
               <div
                 key={p.id}
-                className="relative h-[120px] rounded-[32px] cursor-pointer bg-zinc-900 border border-white/5 flex transition-transform active:scale-[0.98] group"
+                className={`relative h-[120px] rounded-[32px] cursor-pointer bg-zinc-900 border border-white/5 flex transition-transform active:scale-[0.98] group ${projectMenuOpenId === p.id ? "z-50" : "z-0"}`}
                 onClick={() => openProject(p)}
               >
                 <div className="w-[120px] shrink-0 relative overflow-hidden rounded-l-[32px]">
@@ -1857,23 +1910,27 @@ export default function App() {
       )}
 
       {/* Top Header */}
-      <header className="flex justify-between items-center px-4 py-4 shrink-0 bg-black/20 relative z-[80]">
-        <div className="flex items-center gap-3">
+      <header className="flex justify-between items-center px-4 py-4 shrink-0 relative z-[100] pointer-events-none">
+        <div className="flex items-center bg-zinc-800 rounded-full px-1 py-1 shadow-lg border border-white/5 pointer-events-auto">
           <button
             onClick={handleBackToHome}
-            className="w-10 h-10 rounded-full hover:bg-zinc-800 flex items-center justify-center transition-colors"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full hover:bg-zinc-700 flex items-center justify-center transition-colors text-white"
           >
-            <ChevronLeft size={24} />
+            <ChevronLeft size={16} />
           </button>
-          <div className="bg-zinc-800 text-white px-4 py-1.5 rounded-full text-xs font-bold tracking-wider hover:bg-zinc-700 cursor-pointer">
+          
+          <div className="w-px h-3 sm:h-4 bg-zinc-700 mx-1 sm:mx-2"></div>
+          
+          <div className="text-white px-2 sm:px-3 py-1 pr-3 sm:pr-4 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider hover:bg-zinc-700 cursor-pointer">
             {currentProjectRatio}
           </div>
         </div>
-        <div className="flex items-center space-x-2 z-50">
+          
+        <div className="flex items-center pointer-events-auto">
           <div className="relative">
             <button
               onClick={() => setIsExportExpanded(!isExportExpanded)}
-              className="bg-white text-black px-6 h-[40px] rounded-full text-[13px] font-bold shadow hover:bg-zinc-200 transition-colors whitespace-nowrap"
+              className="bg-white text-black px-4 h-[28px] rounded-full text-[10px] font-bold shadow hover:bg-zinc-200 transition-colors whitespace-nowrap"
             >
               EXPORT
             </button>
@@ -1884,7 +1941,7 @@ export default function App() {
                   initial={{ opacity: 0, y: -10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                  className="absolute top-[calc(100%+8px)] right-0 bg-zinc-800 border border-white/10 shadow-2xl rounded-2xl w-[200px] flex flex-col p-2 z-50 origin-top-right overflow-hidden"
+                  className="absolute top-[calc(100%+8px)] right-0 bg-zinc-800 border border-white/10 shadow-2xl rounded-2xl w-[200px] flex flex-col p-2 z-[150] origin-top-right overflow-hidden"
                 >
                   <div className="flex items-center justify-between px-3 py-2">
                     <span className="text-[11px] font-semibold text-white/50">
@@ -2159,14 +2216,25 @@ export default function App() {
         </div>
 
         {/* Playback Transport Controls */}
-        <div className="flex justify-between items-center shrink-0 pr-6 h-[40px] pt-4 pl-[24px] pb-[5px]">
-          <div className="flex items-center gap-4">
-            <span className="text-zinc-300 font-mono text-xs tracking-wider opacity-80 min-w-[50px]">
+        <div 
+          className="flex justify-between items-center shrink-0 w-full"
+          style={{
+            paddingRight: "7px",
+            paddingLeft: "5px",
+            height: "40px",
+            marginTop: "0px",
+            marginLeft: "0px",
+            paddingTop: "29px",
+            paddingBottom: "0px"
+          }}
+        >
+          <div className="flex items-center gap-2 sm:gap-4">
+            <span className="text-zinc-300 font-mono text-[10px] sm:text-xs tracking-wider opacity-80 min-w-[40px] sm:min-w-[50px]">
               {formatTime(currentTime)}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <button
-                className="w-8 h-8 bg-zinc-800 text-white rounded-full shadow flex items-center justify-center hover:bg-zinc-700 transition-colors m-0"
+                className="w-6 h-6 sm:w-8 sm:h-8 bg-zinc-800 text-white rounded-full shadow flex items-center justify-center hover:bg-zinc-700 transition-colors m-0"
                 onClick={() => {
                   setCurrentTime(0);
                   setPlayheadX(0);
@@ -2177,69 +2245,69 @@ export default function App() {
                 }}
                 title="Go to Start"
               >
-                <SkipBack size={14} fill="currentColor" />
+                <SkipBack size={12} fill="currentColor" />
               </button>
               <button
-                className="w-10 h-10 bg-white text-black rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform m-0 pl-0 pr-[4px]"
+                className="w-7 h-7 sm:w-9 sm:h-9 bg-white text-black rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform m-0 pl-0 pr-[4px]"
                 onClick={() => setIsPlaying(!isPlaying)}
               >
                 {isPlaying ? (
-                  <Pause size={18} fill="currentColor" />
+                  <Pause size={14} fill="currentColor" />
                 ) : (
-                  <Play size={18} fill="currentColor" className="ml-1" />
+                  <Play size={14} fill="currentColor" className="ml-[4px] sm:ml-[6px]" />
                 )}
               </button>
             </div>
           </div>
           <div className="flex items-center">
-            <div className="flex bg-zinc-800 rounded-full px-1 py-1 mr-2">
+            <div className="flex bg-zinc-800 rounded-full px-0.5 py-0.5 mr-1 sm:px-1 sm:py-1 sm:mr-2">
               <button
-                className={`p-2 rounded-full transition-colors ${selectedClipId ? "hover:bg-zinc-700 text-white" : "opacity-30"}`}
+                className={`p-1 sm:p-1.5 rounded-full transition-colors ${selectedClipId ? "hover:bg-zinc-700 text-white" : "opacity-30"}`}
                 disabled={!selectedClipId}
                 onClick={handleToggleKeyframe}
               >
-                <Diamond size={16} className={isAtKeyframe ? "fill-white" : ""} />
+                <Diamond size={12} className={isAtKeyframe ? "fill-white" : ""} />
               </button>
               <button
-                className={`p-2 rounded-full transition-colors ${(selectedClipId && isBetweenKeyframes) ? "hover:bg-zinc-700 text-white" : "opacity-30"}`}
+                className={`p-1 sm:p-1.5 rounded-full transition-colors ${(selectedClipId && isBetweenKeyframes) ? "hover:bg-zinc-700 text-white" : "opacity-30"}`}
                 disabled={!selectedClipId || !isBetweenKeyframes}
                 onClick={() => setShowKeyframeGraph(!showKeyframeGraph)}
               >
-                <LineChart size={16} />
+                <LineChart size={12} />
               </button>
             </div>
-            <div className="flex bg-zinc-800 rounded-full px-1 py-1 mr-2">
+            <div className="flex bg-zinc-800 rounded-full px-0.5 py-0.5 mr-1 sm:px-1 sm:py-1 sm:mr-2">
               <button
-                className={`p-2 rounded-full transition-colors ${selectedClipId ? "hover:bg-zinc-700 text-white" : "opacity-30"}`}
+                className={`p-1 sm:p-1.5 rounded-full transition-colors ${selectedClipId ? "hover:bg-zinc-700 text-white" : "opacity-30"}`}
                 disabled={!selectedClipId}
                 onClick={splitSelectedClip}
               >
-                <Scissors size={16} />
+                <Scissors size={12} />
               </button>
-              <div className="w-px bg-zinc-700 my-1 mx-1"></div>
+              <div className="w-px h-3 sm:h-4 bg-zinc-700 mx-0.5 sm:mx-1 my-auto"></div>
               <button
-                className={`p-2 rounded-full transition-colors ${selectedClipIds.length > 0 ? "hover:bg-zinc-700 text-white" : "opacity-30"}`}
+                className={`p-1 sm:p-1.5 rounded-full transition-colors ${selectedClipIds.length > 0 ? "hover:bg-zinc-700 text-white" : "opacity-30"}`}
                 disabled={selectedClipIds.length === 0}
                 onClick={deleteSelectedClip}
               >
-                <Trash2 size={16} />
+                <Trash2 size={12} />
               </button>
             </div>
-            <div className="flex bg-zinc-800 rounded-full px-1 py-1">
+            <div className="flex bg-zinc-800 rounded-full px-0.5 py-0.5 sm:px-1 sm:py-1">
               <button
                 onClick={undo}
                 disabled={historyIndex <= 0}
-                className={`p-2 rounded-full transition-colors ${historyIndex <= 0 ? "opacity-30" : "hover:bg-zinc-700"}`}
+                className={`p-1 sm:p-1.5 rounded-full transition-colors ${historyIndex <= 0 ? "opacity-30" : "hover:bg-zinc-700"}`}
               >
-                <Undo2 size={16} />
+                <Undo2 size={12} />
               </button>
-              <div className="w-px bg-zinc-700 my-1 mx-1"></div>
+              <div className="w-px h-3 sm:h-4 bg-zinc-700 mx-0.5 sm:mx-1 my-auto"></div>
               <button
                 onClick={redo}
                 disabled={historyIndex >= history.length - 1}
-                className={`p-2 rounded-full transition-colors ${historyIndex >= history.length - 1 ? "opacity-30" : "hover:bg-zinc-700"}`}
+                className={`p-1 sm:p-1.5 rounded-full transition-colors ${historyIndex >= history.length - 1 ? "opacity-30" : "hover:bg-zinc-700"}`}
               >
-                <Redo2 size={16} />
+                <Redo2 size={12} />
               </button>
             </div>
           </div>
@@ -2250,7 +2318,7 @@ export default function App() {
       <div className="h-px bg-gradient-to-r from-transparent via-zinc-700 to-transparent relative z-[80] bg-[#1e1e20]"></div>
 
       {/* Editor Timeline Space */}
-      <div className="h-[250px] sm:h-[300px] shrink-0 bg-[#171719] flex flex-col relative w-full select-none z-0 overflow-hidden">
+      <div className={`${currentProjectRatio === "16:9" ? "h-[55vh]" : "h-[35vh]"} shrink-0 bg-[#171719] flex flex-col relative w-full select-none z-0 overflow-hidden`}>
         {/* Timeline Content Flex Container */}
         <div
           id="master-vertical-scroll"
@@ -2269,7 +2337,7 @@ export default function App() {
           <div className="flex min-h-full min-w-max relative w-[fit-content]">
             {/* Left Layer Control Panel */}
             <div className="w-[100px] shrink-0 flex flex-col border-r border-white/5 bg-[#171719] z-[70] sticky left-0 pb-[200px] shadow-[2px_0_10px_rgba(0,0,0,0.2)]">
-              <div className="text-[9px] uppercase tracking-widest text-zinc-500 text-center font-bold sticky top-0 w-full z-[80] bg-[#171719] h-[30px] flex items-center justify-center border-b border-white/5 shrink-0 shadow-[0_4px_10px_rgba(0,0,0,0.2)]">
+              <div className="text-[9px] uppercase tracking-widest text-zinc-500 text-center font-bold sticky top-0 w-full z-[80] bg-[#171719] h-[20px] flex items-center justify-center border-b border-white/5 shrink-0 shadow-[0_4px_10px_rgba(0,0,0,0.2)]">
                 Layers
               </div>
 
@@ -2277,7 +2345,7 @@ export default function App() {
                 {visibleLayers.map((layer) => (
                   <div
                     key={layer.id}
-                    className={`h-[52px] sm:h-[60px] flex flex-col items-center justify-center shrink-0 border-b group py-1 relative transition-all transform-gpu ${draggingLayerId === layer.id ? "bg-indigo-500/20 border-indigo-500/50 scale-[1.02] z-50 shadow-xl" : "bg-zinc-800/20 border-white/5 backdrop-blur-sm z-10"}`}
+                    className={`h-[40px] sm:h-[48px] flex flex-col items-center justify-center shrink-0 border-b group py-1 relative transition-all transform-gpu ${draggingLayerId === layer.id ? "bg-indigo-500/20 border-indigo-500/50 scale-[1.02] z-50 shadow-xl" : "bg-zinc-800/20 border-white/5 backdrop-blur-sm z-10"}`}
                   >
                     <div className="flex gap-0.5 sm:gap-1 items-center">
                       <button
@@ -2453,7 +2521,7 @@ export default function App() {
               {layers.length > 0 && (
                 <div
                   id="ruler-container"
-                  className="sticky top-0 z-[50] h-[30px] bg-[#171719] border-b border-white/5 cursor-pointer hover:bg-[#222] transition-colors"
+                  className="sticky top-0 z-[50] h-[20px] bg-[#171719] border-b border-white/5 cursor-pointer hover:bg-[#222] transition-colors"
                   onPointerDown={(e) => {
                     e.stopPropagation();
                     setIsPlaying(false);
@@ -2497,45 +2565,50 @@ export default function App() {
                     }}
                   >
                     {Array.from({ length: Math.ceil(maxTimelineDuration) }).map(
-                      (_, i) => (
-                        <div
-                          key={i}
-                          className="absolute h-full border-l border-zinc-600/80 pointer-events-none"
-                          style={{ left: `${i * pixelsPerSecond}px` }}
-                        >
-                          <span
-                            className="absolute -left-[4px] top-[2px] text-[10px] text-zinc-300 font-medium font-mono pl-1 bg-transparent px-1 rounded line-height-none leading-none"
-                            style={{ textShadow: "none" }}
+                      (_, i) => {
+                        let step = 1;
+                        if (pixelsPerSecond < 10) step = 30; // very zoomed out
+                        else if (pixelsPerSecond < 20) step = 10;
+                        else if (pixelsPerSecond < 35) step = 5;
+                        else if (pixelsPerSecond < 70) step = 2; // normal default is 100
+                        
+                        const showText = i % step === 0;
+
+                        // Skip rendering the tick entirely if it's too squished
+                        const hideTick = pixelsPerSecond < 5 && i % 5 !== 0;
+                        if (hideTick) return null;
+
+                        return (
+                          <div
+                            key={i}
+                            className="absolute h-full border-l border-zinc-600/80 pointer-events-none"
+                            style={{ left: `${i * pixelsPerSecond}px` }}
                           >
-                            {formatTime(i)}
-                          </span>
-                          {/* Sub-ticks for zoom */}
-                          {Array.from({ length: 9 }).map((_, subIndex) => {
-                            const isHalf = subIndex === 4;
-                            return (
-                              <div
-                                key={subIndex}
-                                className={`absolute bottom-0 w-px ${isHalf ? "bg-zinc-500" : "bg-zinc-700/80"} pointer-events-none`}
-                                style={{
-                                  left: `${(subIndex + 1) * (pixelsPerSecond / 10)}px`,
-                                  height: isHalf ? "10px" : "5px",
-                                }}
+                            {showText && (
+                              <span
+                                className="absolute -left-[4px] top-[2px] text-[9px] text-zinc-300 font-medium font-mono pl-1 bg-transparent px-1 rounded line-height-none leading-none"
+                                style={{ textShadow: "none" }}
                               >
-                                <span
-                                  className="absolute bottom-[12px] text-[8px] text-zinc-500 font-mono"
+                                {i < 60 ? i.toString() : `${Math.floor(i/60)}:${(i%60).toString().padStart(2,"0")}`}
+                              </span>
+                            )}
+                            {/* Sub-ticks for zoom */}
+                            {zoomLevel >= 3 && Array.from({ length: 9 }).map((_, subIndex) => {
+                              const isHalf = subIndex === 4;
+                              return (
+                                <div
+                                  key={subIndex}
+                                  className={`absolute bottom-0 w-px ${isHalf ? "bg-zinc-500" : "bg-zinc-700/80"} pointer-events-none`}
                                   style={{
-                                    transform: "translateX(-50%)",
-                                    opacity: zoomLevel >= 3 ? 1 : 0,
-                                    transition: "opacity 0.2s",
+                                    left: `${(subIndex + 1) * (pixelsPerSecond / 10)}px`,
+                                    height: isHalf ? "10px" : "5px",
                                   }}
-                                >
-                                  {i}.{subIndex + 1}s
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ),
+                                />
+                              );
+                            })}
+                          </div>
+                        );
+                      }
                     )}
                   </div>
                 </div>
@@ -2630,8 +2703,10 @@ export default function App() {
                            if (lidx === undefined) return;
                            const cLeft = clip.leftSeconds * currentPixelsPerSecondRef.current;
                            const cRight = cLeft + clip.durationSeconds * currentPixelsPerSecondRef.current;
-                           const cTop = 32 + lidx * 56;
-                           const cBottom = cTop + 48;
+                           const rowHeight = window.innerWidth >= 640 ? 48 : 40;
+                           const clipHeight = window.innerWidth >= 640 ? 36 : 30;
+                           const cTop = 32 + lidx * rowHeight;
+                           const cBottom = cTop + clipHeight;
 
                            if (cLeft < maxX && cRight > minX && cTop < maxY && cBottom > minY) {
                                newSelected.push(clip.id);
@@ -2731,7 +2806,7 @@ export default function App() {
                         <div
                           key={layer.id}
                           data-layer-id={layer.id}
-                          className={`relative h-[52px] sm:h-[60px] w-full border-b flex items-center group track-space transition-all transform-gpu ${draggingLayerId === layer.id ? "bg-indigo-500/10 border-indigo-500/30 scale-[1.02] shadow-xl z-50 rounded-lg overflow-hidden" : "border-white/5 z-0"}`}
+                          className={`relative h-[40px] sm:h-[48px] w-full border-b flex items-center group track-space transition-all transform-gpu ${draggingLayerId === layer.id ? "bg-indigo-500/10 border-indigo-500/30 scale-[1.02] shadow-xl z-50 rounded-lg overflow-hidden" : "border-white/5 z-0"}`}
                         >
                           {/* Grid Background */}
                           <div
@@ -2758,7 +2833,7 @@ export default function App() {
                                 onPointerDown={(e) =>
                                   handleClipDragStart(e, clip)
                                 }
-                                className={`absolute h-[40px] sm:h-[48px] rounded-lg overflow-hidden flex items-center cursor-pointer select-none transition-shadow
+                                className={`absolute h-[30px] sm:h-[36px] rounded-lg overflow-hidden flex items-center cursor-pointer select-none transition-shadow
                                            ${clip.type === "video" ? "bg-[#3b82f6]" : clip.type === "audio" ? "bg-[#a855f7]" : clip.type === "text" ? "bg-[#f59e0b]" : "bg-[#10b981]"}
                                            ${selectedClipIds.includes(clip.id) ? "ring-2 ring-white/90 shadow-[0_0_15px_rgba(255,255,255,0.5)] z-20 opacity-100 scale-[1.01]" : "opacity-85 hover:opacity-100 z-10"}
                                            ${layer.isHidden || (layer.isMuted && clip.type === "audio") ? "grayscale opacity-30 shadow-none" : ""}
@@ -2888,7 +2963,10 @@ export default function App() {
     </div>
   );
   return (
-    <div className="min-h-screen bg-[#121212] text-white flex flex-col font-sans">
+    <div 
+      className="min-h-screen bg-[#121212] text-white flex flex-col font-sans"
+      style={{ zoom: appScale }}
+    >
       {/* Dynamic Render based on Screen */}
       {currentScreen === "home" && renderHome()}
       {currentScreen === "settings" && renderSettings()}
@@ -2900,7 +2978,7 @@ export default function App() {
             layoutId="new-project-btn"
             layout
             transition={{ type: "spring", bounce: 0.5, duration: 0.6 }}
-            className={`fixed bottom-10 left-1/2 -translate-x-1/2 flex flex-col bg-[#252528] overflow-hidden ${activeExpandedMenu === "speed-curves" ? "rounded-[24px] pt-1.5 pb-1 w-[320px]" : activeExpandedMenu ? "rounded-[24px] pt-1.5 pb-1 w-[253px]" : "rounded-[24px] h-[55px] justify-center w-[253px]"} shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5 z-[200] transform-gpu`}
+            className={`fixed bottom-10 left-1/2 -translate-x-1/2 flex flex-col bg-[#252528] overflow-hidden ${activeExpandedMenu === "speed-curves" ? "rounded-[24px] pt-1.5 pb-1 w-[320px]" : activeExpandedMenu ? "rounded-[24px] pt-1.5 pb-1 w-[223px]" : "rounded-[24px] h-[55px] justify-center w-[223px]"} shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5 z-[200] transform-gpu`}
           >
             <AnimatePresence mode="popLayout">
               {activeExpandedMenu === "volume" && (
@@ -3028,10 +3106,12 @@ export default function App() {
                   />
                   <div className="flex gap-2 pb-4">
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         const currentClip = clips.find(
                           (c) => c.id === selectedClipId,
                         );
+                        if (!currentClip || currentClip.type !== "video") return;
+
                         const isOpticalFlowApplied =
                           currentClip?.opticalFlow || false;
 
@@ -3041,7 +3121,7 @@ export default function App() {
                             setClips((prev) =>
                               prev.map((c) =>
                                 c.id === selectedClipId
-                                  ? { ...c, opticalFlow: false }
+                                  ? { ...c, opticalFlow: false, src: c.originalSrc || c.src }
                                   : c,
                               ),
                             );
@@ -3051,33 +3131,37 @@ export default function App() {
 
                         if (smoothProcessingProgress !== null) return;
                         setSmoothProcessingProgress(0);
-                        let progress = 0;
-                        const interval = setInterval(() => {
-                          progress += Math.random() * 8 + 2;
-                          if (progress >= 100) {
-                            clearInterval(interval);
-                            setSmoothProcessingProgress(100);
 
-                            if (selectedClipId) {
-                              setClips((prev) =>
-                                prev.map((c) =>
-                                  c.id === selectedClipId
-                                    ? { ...c, opticalFlow: true }
-                                    : c,
-                                ),
-                              );
+                        try {
+                          const newSrc = await processSmoothSlowMoBrowser(
+                            currentClip.src,
+                            currentClip.speed || 1,
+                            (progress) => {
+                              setSmoothProcessingProgress(Math.min(99, Math.round(progress)));
                             }
+                          );
 
-                            setTimeout(() => {
-                              setSmoothProcessingProgress(null);
-                              showToast("Optical Flow Applied");
-                            }, 500);
-                          } else {
-                            setSmoothProcessingProgress(
-                              Math.min(99, Math.round(progress)),
+                          setSmoothProcessingProgress(100);
+
+                          if (selectedClipId) {
+                            setClips((prev) =>
+                              prev.map((c) =>
+                                c.id === selectedClipId
+                                  ? { ...c, opticalFlow: true, originalSrc: c.originalSrc || c.src, src: newSrc }
+                                  : c,
+                              ),
                             );
                           }
-                        }, 150);
+
+                          setTimeout(() => {
+                            setSmoothProcessingProgress(null);
+                            showToast("Optical Flow Applied");
+                          }, 500);
+                        } catch (err) {
+                          console.error(err);
+                          showToast("Failed to apply optical flow.");
+                          setSmoothProcessingProgress(null);
+                        }
                       }}
                       className={`flex-1 flex justify-center items-center gap-2 px-3 py-1.5 rounded-full transition-colors active:scale-95 relative overflow-hidden ${clips.find((c) => c.id === selectedClipId)?.opticalFlow ? "bg-indigo-600 hover:bg-indigo-500" : "bg-zinc-800 hover:bg-zinc-700"}`}
                     >
@@ -3627,7 +3711,7 @@ export default function App() {
                 layout
                 className="w-px h-6 bg-zinc-700 mx-1 shrink-0"
               ></motion.div>
-              <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide w-[186px] overflow-hidden shrink-0 snap-x snap-mandatory">
+              <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide w-[156px] overflow-hidden shrink-0 snap-x snap-mandatory">
                 {flowBarOrder.map((key) => {
                   switch(key) {
                     case 'volume': return (

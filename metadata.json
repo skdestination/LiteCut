@@ -1,6 +1,6 @@
 {
-  "name": "Remix: LiteCut",
+  "name": "Remix LiteCut",
   "description": "A lightweight, intuitive video editing app with trim, merge, slow-motion, and color grading features.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,0 +1,24 @@
+workflows:
+  android-app:
+    name: Capacitor Android Build
+    max_build_duration: 120
+    environment:
+      node: latest
+      java: 17
+    triggering:
+      events:
+        - push
+    scripts:
+      - name: Install npm dependencies
+        script: npm install
+      - name: Build web application
+        script: npm run build
+      - name: Sync Capacitor project
+        script: npx cap sync android
+      - name: Build Android App
+        script: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
+    artifacts:
+      - android/app/build/outputs/**/*.apk
