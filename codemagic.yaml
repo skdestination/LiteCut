@@ -15,6 +15,12 @@ workflows:
         script: npm run build
       - name: Sync Capacitor project
         script: npx cap sync android
+      - name: Download OpenCV SDK
+        script: |
+          cd android
+          wget -q https://github.com/opencv/opencv/releases/download/4.9.0/opencv-4.9.0-android-sdk.zip
+          unzip -q opencv-4.9.0-android-sdk.zip
+          mv OpenCV-android-sdk opencv
       - name: Build Android App
         script: |
           cd android
